@@ -187,13 +187,31 @@ label.f{display:block;font-size:12px;color:var(--mute);margin:10px 0 5px}
 #toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 96px);transform:translateX(-50%) translateY(16px);background:var(--fg);color:var(--scr);padding:9px 15px;border-radius:8px;font-size:13.5px;font-weight:600;opacity:0;transition:.2s;z-index:50;pointer-events:none;max-width:88vw;text-align:center}
 #toast.show{opacity:1;transform:translateX(-50%)}
 .fileIn{display:none}
+/* ===== 기기 연결 ===== */
+.lk p{white-space:normal;line-height:1.55;font-size:13.5px;color:var(--mute);margin:4px 0 10px}
+.lk .code{font-size:42px;font-weight:800;letter-spacing:10px;text-align:center;margin:14px 0 6px;padding-left:10px}
+.lk .big{font-size:15px;color:var(--fg);text-align:center;margin:8px 0}
+.lk .drop{display:block;width:100%;border:2px dashed var(--line);border-radius:12px;padding:22px 10px;text-align:center;background:var(--scr2);color:var(--fg);font-size:14px;margin:8px 0}
+.lk .drop:active{background:var(--hl);color:var(--hlfg)}
+.lk .prog{height:8px;background:var(--segoff);border-radius:4px;overflow:hidden;margin:6px 0}
+.lk .prog i{display:block;height:100%;background:var(--fg)}
+.lk .codein{font-size:28px;text-align:center;letter-spacing:8px;font-weight:800}
+.lk .ok{color:var(--fg);font-weight:700}
+#drop{position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.65);display:grid;place-items:center;color:#fff;font-size:20px;font-weight:700;pointer-events:none;text-align:center;line-height:1.6}
+#drop>div{border:3px dashed #fff;border-radius:20px;padding:40px 50px}
+/* 컴퓨터 화면에서는 가운데에 폰 크기로 */
+@media (min-width:700px){
+  #device{max-width:460px;margin:0 auto}
+  #player{max-width:460px;margin:0 auto;left:0;right:0}
+  #sheet{max-width:444px;margin:0 auto}
+}
 </style>
 </head>
 <body>
 <div class="topsafe"></div>
 <div id="device">
   <div id="screen" class="screen">
-    <div class="status mono"><span id="sPlay">❚❚</span><span class="eq"><i></i><i></i><i></i></span><span class="sp"></span><span data-sleepbadge></span><span class="clock"></span></div>
+    <div class="status mono"><span id="sPlay">❚❚</span><span class="eq"><i></i><i></i><i></i></span><span class="sp"></span><span data-linkbadge></span><span data-sleepbadge></span><span class="clock"></span></div>
     <div class="navbar">
       <div class="nb"><button class="icon" id="backBtn" data-act="back" data-icon="back"></button></div>
       <h1 id="title">오프뮤직</h1>
@@ -250,6 +268,8 @@ label.f{display:block;font-size:12px;color:var(--mute);margin:10px 0 5px}
 <input type="file" id="file" class="fileIn" multiple accept="audio/*,.mp3,.m4a,.aac,.flac,.wav,.ogg,.opus,.lrc,.txt">
 <input type="file" id="imgFile" class="fileIn" accept="image/*">
 <input type="file" id="lrcFile" class="fileIn" accept=".lrc,.txt,text/plain">
+<input type="file" id="sendFile" class="fileIn" multiple accept="audio/*,.mp3,.m4a,.aac,.flac,.wav,.ogg,.opus,.lrc,.txt">
+<div id="drop" class="hidden"><div id="dropMsg">여기에 놓으세요</div></div>
 <audio id="audio" preload="auto"></audio>
 
 <script>
@@ -285,6 +305,9 @@ up:'<svg viewBox="0 0 24 24"><path d="M12 6l-7 7 1.4 1.4L12 8.8l5.6 5.6L19 13z"/
 down:'<svg viewBox="0 0 24 24"><path d="M12 18l7-7-1.4-1.4-5.6 5.6-5.6-5.6L5 11z"/></svg>',
 minus:'<svg viewBox="0 0 24 24"><path d="M5 11h14v2H5z"/></svg>',
 nextup:'<svg viewBox="0 0 24 24"><path d="M3 6h12v2H3zm0 5h8v2H3zm0 5h8v2H3zm11-4v8l6-4z"/></svg>',
+link:'<svg viewBox="0 0 24 24"><path d="M3 5h13v9H3zm1.5 1.5v6h10v-6zM1 15h17v2H1zm18-7h4v11h-4zm1 1v8h2V9z"/></svg>',
+send:'<svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></svg>',
+recv:'<svg viewBox="0 0 24 24"><path d="M11 3h2v10.2l3.6-3.6L18 11l-6 6-6-6 1.4-1.4 3.6 3.6zM4 19h16v2H4z"/></svg>',
 };
 document.querySelectorAll('[data-icon]').forEach(e=>e.innerHTML=I[e.dataset.icon]);
 document.addEventListener('touchstart',()=>{},{passive:true}); // iOS :active 표시용
@@ -414,15 +437,17 @@ applyTheme(lsGet('om_theme','midnight'));
 
 /* ================= 음악 가져오기 ================= */
 $('#file').addEventListener('change',e=>{const f=e.target.files;if(f&&f.length)importFiles(f);e.target.value=''});
-async function importFiles(list){
-  list=[...list];
-  const audioF=list.filter(f=>/\.(mp3|m4a|aac|flac|wav|ogg|opus)$/i.test(f.name)||(/^audio\//.test(f.type)&&!/\.(lrc|txt)$/i.test(f.name)));
-  const lyrF=new Map(list.filter(f=>/\.(lrc|txt)$/i.test(f.name)).map(f=>[baseName(f.name),f]));
-  if(!audioF.length&&!lyrF.size){toast('오디오 파일이 없어요');return}
+const isAudioF=f=>/\.(mp3|m4a|aac|flac|wav|ogg|opus)$/i.test(f.name)||(/^audio\//.test(f.type)&&!/\.(lrc|txt)$/i.test(f.name));
+const isLyrF=f=>/\.(lrc|txt)$/i.test(f.name);
+async function importFiles(list,opts={}){
+  list=[...list];const quiet=!!opts.quiet;
+  const audioF=list.filter(isAudioF);
+  const lyrF=new Map(list.filter(isLyrF).map(f=>[baseName(f.name),f]));
+  if(!audioF.length&&!lyrF.size){if(!quiet)toast('오디오 파일이 없어요');return {added:0,skip:0,fail:0,lyrN:0}}
   try{navigator.storage&&navigator.storage.persist&&navigator.storage.persist()}catch(_){}
   const seen=new Set(S.tracks.map(t=>t.srcName+'|'+t.size));let added=0,skip=0,fail=0,lyrN=0,quota=false;
   const readLyr=async f=>decodeFileText(await f.arrayBuffer()).trim();
-  for(let i=0;i<audioF.length;i++){const f=audioF[i];toast(`가져오는 중… ${i+1}/${audioF.length}`,0);
+  for(let i=0;i<audioF.length;i++){const f=audioF[i];if(!quiet)toast(`가져오는 중… ${i+1}/${audioF.length}`,0);
     if(seen.has(f.name+'|'+f.size)){skip++;continue}
     try{const tag=await readTags(f),fb=fromName(f.name);
       const ext=(f.name.split('.').pop()||'').toLowerCase();
@@ -440,8 +465,8 @@ async function importFiles(list){
   for(const [bn,f] of lyrF){const t=S.tracks.find(x=>baseName(x.srcName||'')===bn);if(!t)continue;
     const l=await readLyr(f);if(l){t.lyrics=l;await dbPut('tracks',t);lyrN++}}
   const parts=[];if(added)parts.push(`${added}곡 추가`);if(skip)parts.push(`중복 ${skip}곡 건너뜀`);if(lyrN)parts.push(`가사 ${lyrN}개`);if(fail)parts.push(`실패 ${fail}곡`);
-  toast(quota?'저장 공간이 부족해요':(parts.join(' · ')||'추가된 것이 없어요'),3500);
-  render();updateUI()}
+  if(!quiet||quota)toast(quota?'저장 공간이 부족해요':(parts.join(' · ')||'추가된 것이 없어요'),3500);
+  refresh();updateUI();return {added,skip,fail,lyrN,quota}}
 
 /* ================= 화면(뷰) ================= */
 const TITLES={home:'오프뮤직',songs:'노래',artists:'아티스트',albums:'앨범',playlists:'플레이리스트',liked:'좋아요',recent:'최근 들은 곡',top:'많이 들은 곡',settings:'설정'};
@@ -471,7 +496,9 @@ const V={
       +mrow('data-act="go" data-v="albums"','disc','앨범',groups('album').length)+mrow('data-act="go" data-v="playlists"','lists','플레이리스트',S.pls.length)
       +mrow('data-act="go" data-v="liked"','heart','좋아요',liked)+mrow('data-act="go" data-v="recent"','recent','최근 들은 곡')
       +mrow('data-act="go" data-v="top"','chart','많이 들은 곡')+mrow('data-act="shufall"','shuffle','전체 셔플 재생','',false)
-      +mrow('data-act="sleep"','moon','잠자기 타이머',`<span data-sleep>${sleepLabel()}</span>`)+mrow('data-act="go" data-v="settings"','sliders','설정')},
+      +mrow('data-act="sleep"','moon','잠자기 타이머',`<span data-sleep>${sleepLabel()}</span>`)
+      +mrow('data-act="link"','link','기기 연결 <small>컴퓨터 ↔ 폰으로 노래 보내기</small>',`<span data-linkstate>${linkLabel()}</span>`)
+      +mrow('data-act="go" data-v="settings"','sliders','설정')},
   songs(){if(!S.tracks.length)return V.home();
     return `<div class="search"><input id="q" class="in" type="search" placeholder="노래, 아티스트, 앨범 검색" value="${esc(S.q)}"></div>
     ${playBar(`<select id="sort"><option value="recent">최근 추가순</option><option value="title">제목순</option><option value="artist">아티스트순</option><option value="plays">많이 들은 순</option></select>`)}
@@ -540,7 +567,7 @@ function closePlayerNow(){playerOpen=false;$('#player').classList.remove('open')
 function ask(title,val=''){return new Promise(res=>{
   openSheet(`<h3>${esc(title)}</h3><input id="askIn" class="in" value="${esc(val)}" maxlength="80" enterkeyhint="done"><div class="row2"><button class="btn ghost" data-act="back">취소</button><button class="btn" data-act="askok">확인</button></div>`);
   askRes=res;setTimeout(()=>{const i=$('#askIn');if(i){i.focus();i.select()}},280)})}
-$('#sheet').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='askIn')act('askok',e.target)});
+$('#sheet').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.id==='askIn')act('askok',e.target);if(e.key==='Enter'&&e.target.id==='linkCode')act('linkgo',e.target)});
 
 /* ================= 플레이어 ================= */
 const audio=$('#audio');
@@ -719,6 +746,164 @@ async function newPlaylist(name){const p={id:uid(),name,trackIds:[],createdAt:Da
 async function toggleLike(id){const t=S.map.get(id);if(!t)return;t.liked=!t.liked;t.likedAt=t.liked?Date.now():0;await dbPut('tracks',t);
   toast(t.liked?'♥ 좋아요에 담았어요':'좋아요 취소',1200);updateUI();refresh()}
 
+/* ================= 기기 연결 (컴퓨터 ↔ 폰) =================
+   연결할 때만 인터넷으로 서로를 찾고(PeerJS), 노래는 WebRTC로 기기끼리 직접 전송해요. */
+const PFX='offmusic-v1-',CH=16*1024,PEERJS='https://cdn.jsdelivr.net/npm/peerjs@1.5.4/dist/peerjs.min.js';
+const LINK={peer:null,conn:null,role:null,state:'idle',code:'',remote:'',err:'',wake:null,
+  rx:null,rxDone:0,rxAdded:0,rxName:'',rxPct:0,
+  tx:{queue:[],busy:false,sent:0,total:0,cur:'',pct:0,skipped:0,added:0,dup:0,fail:0,lyr:0},have:new Set()};
+const sleepMs=ms=>new Promise(r=>setTimeout(r,ms));
+function devName(){const u=navigator.userAgent;if(/iPhone/.test(u))return '아이폰';if(/iPad/.test(u)||(/Macintosh/.test(u)&&navigator.maxTouchPoints>1))return '아이패드';
+  if(/Android/.test(u))return '안드로이드';if(/Windows/.test(u))return 'Windows 컴퓨터';if(/Mac/.test(u))return 'Mac';return '다른 기기'}
+function linkLabel(){if(LINK.state==='connected')return '연결됨';if(LINK.state==='waiting')return '기다리는 중';if(LINK.state==='connecting'||LINK.state==='starting')return '연결 중';return ''}
+function loadPeer(){if(window.Peer)return Promise.resolve();return new Promise((res,rej)=>{const s=document.createElement('script');s.src=PEERJS;s.onload=res;s.onerror=()=>{s.remove();rej(new Error('load'))};document.head.appendChild(s)})}
+async function wake(on){try{if(on&&!LINK.wake&&navigator.wakeLock){LINK.wake=await navigator.wakeLock.request('screen');LINK.wake.addEventListener('release',()=>{LINK.wake=null})}
+  else if(!on&&LINK.wake){await LINK.wake.release();LINK.wake=null}}catch(_){}}
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&LINK.state==='connected')wake(true)});
+function peerErr(e){const t=e&&e.type;
+  if(t==='peer-unavailable')return '그 번호의 기기를 찾을 수 없어요. 폰 화면의 번호를 다시 확인해 주세요.';
+  if(t==='network'||t==='server-error'||t==='socket-error'||t==='socket-closed')return '인터넷에 연결되어 있어야 기기를 찾을 수 있어요. 와이파이를 확인해 주세요.';
+  if(t==='browser-incompatible')return '이 브라우저는 기기 연결을 지원하지 않아요.';
+  return '연결 중 문제가 생겼어요 ('+(t||'알 수 없음')+')'}
+function linkReset(){const p=LINK.peer;LINK.peer=null;const c=LINK.conn;LINK.conn=null;try{c&&c.close()}catch(_){}try{p&&p.destroy()}catch(_){}
+  Object.assign(LINK,{role:null,state:'idle',code:'',remote:'',err:'',rx:null,rxDone:0,rxAdded:0,rxName:'',rxPct:0,have:new Set()});
+  Object.assign(LINK.tx,{queue:[],busy:false,sent:0,total:0,cur:'',pct:0,skipped:0,added:0,dup:0,fail:0,lyr:0});wake(false);linkUpdate()}
+function linkFail(msg){const role=LINK.role;linkReset();LINK.role=role;LINK.state='error';LINK.err=msg;linkUpdate()}
+function linkClosed(){if(!LINK.conn)return;const was=LINK.state==='connected';LINK.conn=null;if(was){toast('연결이 끊겼어요',2500);linkFail('연결이 끊겼어요. 두 기기 모두 오프뮤직 화면을 켜 둔 채로 다시 연결해 주세요.')}}
+let linkPaint=0;
+function linkUpdate(force){const now=Date.now();if(!force&&now-linkPaint<150){clearTimeout(linkUpdate.t);linkUpdate.t=setTimeout(()=>linkUpdate(true),160);return}linkPaint=now;
+  document.querySelectorAll('[data-linkbadge]').forEach(e=>e.textContent=LINK.state==='connected'?'⇄':'');
+  document.querySelectorAll('[data-linkstate]').forEach(e=>e.textContent=linkLabel());
+  const box=$('#linkBox');if(box)box.innerHTML=linkHTML()}
+function linkHTML(){const L2=LINK,x=L2.tx;
+  if(!L2.role)return `<h3>${I.link} 기기 연결</h3>
+    <p>같은 와이파이의 컴퓨터와 폰을 연결해서 <b>컴퓨터에서 고른 노래를 폰으로 바로</b> 보낼 수 있어요. 서로를 찾을 때만 인터넷이 필요하고, 노래 파일은 두 기기끼리 직접 전송돼요.</p>
+    <button class="item" data-act="linkrecv">${I.recv}이 기기로 받기<span class="mr">폰에서</span></button>
+    <button class="item" data-act="linksend">${I.send}다른 기기로 보내기<span class="mr">컴퓨터에서</span></button>`;
+  if(L2.state==='error')return `<h3>${I.link} 기기 연결</h3><p class="big">${esc(L2.err)}</p>
+    <div class="row2"><button class="btn ghost" data-act="linkoff">처음으로</button><button class="btn" data-act="${L2.role==='recv'?'linkrecv':'linksend'}">다시 시도</button></div>`;
+  if(L2.role==='recv'){
+    if(L2.state!=='connected')return `<h3>${I.recv} 이 기기로 받기</h3>
+      ${L2.state==='waiting'?`<div class="code mono">${L2.code}</div><p style="text-align:center">컴퓨터에서 오프뮤직을 열고<br><b>기기 연결 → 다른 기기로 보내기</b>에 이 번호를 입력하세요.<br>받는 동안 이 화면을 켜 두세요.</p>`
+        :'<p class="big">연결 준비 중…</p>'}
+      <div class="row2"><button class="btn ghost" data-act="linkoff">취소</button></div>`;
+    return `<h3>${I.recv} ${esc(L2.remote||'다른 기기')}와 연결됨</h3>
+      ${L2.rx?`<p class="big">받는 중 · ${esc(L2.rxName)}</p><div class="prog"><i style="width:${L2.rxPct}%"></i></div>`:`<p class="big">${L2.rxDone?'다 받았어요 ✓':'보내는 쪽에서 노래를 고르면 자동으로 들어와요'}</p>`}
+      <p style="text-align:center">받은 파일 <b class="ok">${L2.rxDone}</b>개 · 새로 추가 <b class="ok">${L2.rxAdded}</b>곡<br>받는 동안 이 화면을 켜 두세요.</p>
+      <div class="row2"><button class="btn ghost" data-act="linkoff">연결 끊기</button><button class="btn" data-act="back">닫기</button></div>`}
+  // 보내는 쪽
+  if(L2.state==='entry'||L2.state==='idle')return `<h3>${I.send} 다른 기기로 보내기</h3>
+    <p>먼저 폰의 오프뮤직에서 <b>기기 연결 → 이 기기로 받기</b>를 누르고, 화면에 나온 6자리 번호를 입력하세요.</p>
+    <input id="linkCode" class="in codein mono" inputmode="numeric" maxlength="6" placeholder="000000" autocomplete="off">
+    <div class="row2"><button class="btn ghost" data-act="linkoff">취소</button><button class="btn" data-act="linkgo">연결</button></div>`;
+  if(L2.state!=='connected')return `<h3>${I.send} 다른 기기로 보내기</h3><p class="big">연결 중… (${esc(L2.code)})</p><div class="row2"><button class="btn ghost" data-act="linkoff">취소</button></div>`;
+  const doneAll=!x.busy&&x.total&&x.sent>=x.total;
+  return `<h3>${I.send} ${esc(L2.remote||'다른 기기')}와 연결됨</h3>
+    <button class="drop" data-act="sendpick"><b>노래 파일 고르기</b><br><span style="font-size:12px;color:var(--mute)">또는 mp3·lrc 파일을 이 창에 끌어다 놓기</span></button>
+    ${S.tracks.length?`<button class="item" data-act="sendlib">${I.lists}이 기기의 노래 ${S.tracks.length}곡 전부 보내기<span class="mr">가사·커버·좋아요 포함</span></button>`:''}
+    ${x.total?`<p class="big">${x.busy?`보내는 중 ${Math.min(x.sent+1,x.total)}/${x.total} · ${esc(x.cur)}`:(doneAll?'다 보냈어요 ✓':'')}</p>
+      <div class="prog"><i style="width:${x.total?((x.sent+(x.busy?x.pct/100:0))/x.total*100):0}%"></i></div>
+      <p style="text-align:center">새로 추가 <b class="ok">${x.added}</b> · 이미 있음 <b class="ok">${x.dup+x.skipped}</b>${x.lyr?` · 가사 <b class="ok">${x.lyr}</b>`:''}${x.fail?` · 실패 <b class="ok">${x.fail}</b>`:''}</p>`:''}
+    <div class="row2"><button class="btn ghost" data-act="linkoff">연결 끊기</button><button class="btn" data-act="back">닫기</button></div>`}
+function linkSheet(){openSheet('<div class="lk" id="linkBox"></div>');linkUpdate(true)}
+
+/* --- 받는 쪽 --- */
+async function startReceive(){linkReset();LINK.role='recv';LINK.state='starting';linkUpdate(true);
+  try{await loadPeer()}catch(_){return linkFail('인터넷에 연결되어 있어야 기기를 찾을 수 있어요. 와이파이를 확인해 주세요.')}
+  if(LINK.role!=='recv')return;
+  const open=()=>{LINK.code=String(Math.floor(100000+Math.random()*900000));const p=new Peer(PFX+LINK.code);LINK.peer=p;
+    p.on('open',()=>{if(LINK.peer!==p)return;LINK.state='waiting';linkUpdate(true)});
+    p.on('connection',c=>{if(LINK.conn){c.on('open',()=>c.close());return}LINK.conn=c;
+      c.on('open',()=>{LINK.state='connected';wake(true);
+        c.send(JSON.stringify({t:'hello',name:devName(),have:S.tracks.map(t=>t.srcName+'|'+t.size)}));linkUpdate(true);toast('연결됐어요')});
+      c.on('data',d=>{rxChain=rxChain.then(()=>rxHandle(d,c)).catch(e=>console.error(e))});
+      c.on('close',linkClosed);c.on('error',()=>{})});
+    p.on('disconnected',()=>{if(LINK.peer===p&&!LINK.conn)try{p.reconnect()}catch(_){}});
+    p.on('error',e=>{if(LINK.peer!==p)return;if(e.type==='unavailable-id'){p.destroy();open();return}if(LINK.conn&&e.type!=='peer-unavailable')return;linkFail(peerErr(e))})};
+  open()}
+let rxChain=Promise.resolve();
+async function rxHandle(d,c){
+  if(typeof d==='string'){let m;try{m=JSON.parse(d)}catch(_){return}
+    if(m.t==='file'){LINK.rx={h:m,parts:[],got:0,total:(m.size||0)+(m.coverSize||0)};LINK.rxName=m.meta?m.meta.title:m.name;LINK.rxPct=0;linkUpdate()}
+    else if(m.t==='end'&&LINK.rx){const r=LINK.rx;LINK.rx=null;let st='fail';try{st=await rxStore(r)}catch(e){console.error(e)}
+      LINK.rxDone++;if(st==='added')LINK.rxAdded++;try{c.send(JSON.stringify({t:'ack',st}))}catch(_){}linkUpdate()}
+    else if(m.t==='done'){toast(`${LINK.remote||'다른 기기'}에서 받기 끝 · 새로 ${LINK.rxAdded}곡`,3000);linkUpdate(true)}
+    else if(m.t==='hello'){LINK.remote=m.name||'';linkUpdate(true)}
+    return}
+  if(d instanceof Blob)d=await d.arrayBuffer();else if(ArrayBuffer.isView(d))d=d.buffer.slice(d.byteOffset,d.byteOffset+d.byteLength);
+  const r=LINK.rx;if(!r)return;r.parts.push(d);r.got+=d.byteLength;LINK.rxPct=r.total?Math.min(100,r.got/r.total*100):0;linkUpdate()}
+async function rxStore(r){const h=r.h;const all=new Blob(r.parts);r.parts=null;
+  let cover=null,audioB=all;if(h.coverSize){cover=all.slice(0,h.coverSize,h.coverType||'image/jpeg');audioB=all.slice(h.coverSize,all.size)}
+  if(h.meta){const m=h.meta,key=(m.srcName||h.name)+'|'+(m.size||audioB.size);
+    if(S.tracks.some(t=>t.srcName+'|'+t.size===key))return 'dup';
+    const blob=new Blob([audioB],{type:h.type||'audio/mpeg'});
+    const t={title:m.title||h.name,artist:m.artist||UNK_AR,album:m.album||UNK_AL,duration:m.duration||0,lyrics:m.lyrics||'',
+      srcName:m.srcName||h.name,size:m.size||audioB.size,plays:m.plays||0,lastPlayed:m.lastPlayed||0,liked:!!m.liked,likedAt:m.likedAt||0,
+      id:uid(),cover:cover&&cover.size>200?cover:null,addedAt:Date.now()};
+    await dbPut('files',{id:t.id,blob});await dbPut('tracks',t);S.tracks.push(t);S.map.set(t.id,t);refresh();return 'added'}
+  const f=new File([audioB],h.name,{type:h.type||''});const st=await importFiles([f],{quiet:true});
+  return st.quota?'fail':st.added?'added':st.lyrN?'lyrics':st.skip?'dup':'fail'}
+
+/* --- 보내는 쪽 --- */
+async function startSend(code){if(!/^\d{6}$/.test(code)){toast('6자리 번호를 입력해 주세요');return}
+  linkReset();LINK.role='send';LINK.state='connecting';LINK.code=code;linkUpdate(true);
+  try{await loadPeer()}catch(_){return linkFail('인터넷에 연결되어 있어야 기기를 찾을 수 있어요. 와이파이를 확인해 주세요.')}
+  if(LINK.role!=='send')return;
+  const p=new Peer();LINK.peer=p;
+  p.on('open',()=>{if(LINK.peer!==p)return;const c=p.connect(PFX+code,{reliable:true,serialization:'raw'});LINK.conn=c;
+    const to=setTimeout(()=>{if(LINK.conn===c&&LINK.state==='connecting')linkFail('연결이 안 돼요. 두 기기가 같은 와이파이에 있는지, 번호가 맞는지 확인해 주세요.')},25000);
+    c.on('data',async d=>{if(typeof d!=='string')return;let m;try{m=JSON.parse(d)}catch(_){return}
+      if(m.t==='hello'){clearTimeout(to);LINK.state='connected';LINK.remote=m.name||'';LINK.have=new Set(m.have||[]);wake(true);
+        try{c.send(JSON.stringify({t:'hello',name:devName()}))}catch(_){}toast(`${LINK.remote}와 연결됐어요`);linkUpdate(true);pump()}
+      else if(m.t==='ack'){const x=LINK.tx;if(m.st==='added')x.added++;else if(m.st==='dup')x.dup++;else if(m.st==='lyrics')x.lyr++;else x.fail++;linkUpdate()}});
+    c.on('close',linkClosed);c.on('error',()=>{})});
+  p.on('error',e=>{if(LINK.peer!==p)return;linkFail(peerErr(e))})}
+function queueSend(files){if(LINK.role!=='send'||LINK.state!=='connected'){toast('먼저 받을 기기와 연결해 주세요');return}
+  const x=LINK.tx,list=[...files].filter(f=>isAudioF(f)||isLyrF(f));
+  if(!list.length){toast('보낼 수 있는 노래 파일이 없어요');return}
+  list.sort((a,b)=>isLyrF(a)-isLyrF(b)); // 노래 먼저, 가사 파일은 나중에
+  for(const f of list){if(isAudioF(f)&&LINK.have.has(f.name+'|'+f.size)){x.skipped++;continue}x.queue.push({file:f});x.total++}
+  linkUpdate(true);pump()}
+function queueLibrary(){const x=LINK.tx;let n=0;
+  for(const t of S.tracks.slice().sort((a,b)=>a.addedAt-b.addedAt)){if(LINK.have.has(t.srcName+'|'+t.size)){x.skipped++;continue}x.queue.push({id:t.id});x.total++;n++}
+  if(!n)toast('받는 기기에 이미 다 있어요');linkUpdate(true);pump()}
+async function pump(){const x=LINK.tx;if(x.busy||LINK.state!=='connected')return;x.busy=true;linkUpdate(true);
+  try{while(x.queue.length&&LINK.state==='connected'){const it=x.queue.shift();await sendItem(it);x.sent++;linkUpdate()}
+    if(LINK.conn&&LINK.conn.open)LINK.conn.send(JSON.stringify({t:'done'}))}
+  catch(e){console.error(e)}
+  x.busy=false;linkUpdate(true)}
+async function sendItem(it){const c=LINK.conn,x=LINK.tx;let hdr,blob,cover=null;
+  if(it.file){blob=it.file;hdr={t:'file',name:it.file.name,size:blob.size,type:it.file.type}}
+  else{const t=S.map.get(it.id);if(!t)return;const f=await dbGet('files',t.id);if(!f)return;blob=f.blob;cover=t.cover||null;
+    const meta={};for(const k of ['title','artist','album','duration','lyrics','srcName','size','plays','lastPlayed','liked','likedAt'])meta[k]=t[k];
+    hdr={t:'file',name:t.srcName||t.title,size:blob.size,type:blob.type,meta,coverSize:cover?cover.size:0,coverType:cover?cover.type:''}}
+  x.cur=hdr.meta?hdr.meta.title:hdr.name;x.pct=0;linkUpdate();
+  c.send(JSON.stringify(hdr));
+  const parts=cover?[cover,blob]:[blob],total=(cover?cover.size:0)+blob.size;let sent=0;
+  const dc=c.dataChannel,BLOCK=512*1024,HIGH=4*1024*1024;
+  if(dc)dc.bufferedAmountLowThreshold=1024*1024;
+  const drain=()=>new Promise(r=>{let done=false;const fin=()=>{if(done)return;done=true;dc.removeEventListener('bufferedamountlow',fin);r()};
+    dc.addEventListener('bufferedamountlow',fin);setTimeout(fin,500)});
+  for(const b of parts)for(let o=0;o<b.size;o+=BLOCK){
+    const block=new Uint8Array(await b.slice(o,o+BLOCK).arrayBuffer());
+    for(let p=0;p<block.length;p+=CH){
+      while(dc&&dc.bufferedAmount>HIGH){if(!c.open)throw new Error('closed');await drain()}
+      if(!c.open)throw new Error('closed');
+      const end=Math.min(p+CH,block.length);c.send(block.slice(p,end).buffer);sent+=end-p}
+    x.pct=sent/total*100;linkUpdate()}
+  c.send(JSON.stringify({t:'end'}))}
+$('#sendFile').addEventListener('change',e=>{const f=e.target.files;if(f&&f.length)queueSend(f);e.target.value=''});
+
+/* --- 컴퓨터: 창에 파일 끌어다 놓기 --- */
+let dragN=0;
+const hasFiles=e=>e.dataTransfer&&[...(e.dataTransfer.types||[])].includes('Files');
+addEventListener('dragenter',e=>{if(!hasFiles(e))return;e.preventDefault();dragN++;
+  $('#dropMsg').innerHTML=LINK.role==='send'&&LINK.state==='connected'?`여기에 놓으면<br><b>${esc(LINK.remote||'연결된 기기')}</b>로 보내요`:'여기에 놓으면<br>이 기기에 추가해요';$('#drop').classList.remove('hidden')});
+addEventListener('dragover',e=>{if(hasFiles(e))e.preventDefault()});
+addEventListener('dragleave',e=>{if(!hasFiles(e))return;if(--dragN<=0){dragN=0;$('#drop').classList.add('hidden')}});
+addEventListener('drop',e=>{if(!hasFiles(e))return;e.preventDefault();dragN=0;$('#drop').classList.add('hidden');const f=e.dataTransfer.files;if(!f||!f.length)return;
+  if(LINK.role==='send'&&LINK.state==='connected')queueSend(f);else importFiles(f)});
+
 /* ================= 동작 ================= */
 document.addEventListener('click',e=>{const el=e.target.closest('[data-act]');if(!el)return;e.stopPropagation();act(el.dataset.act,el)});
 async function act(a,el){const d=el.dataset||{};
@@ -788,6 +973,13 @@ async function act(a,el){const d=el.dataset||{};
   case 'pladdall':{const p=S.pls.find(x=>x.id===view().key);history.back();await addTo(p,S.tracks.slice().sort((a,b)=>b.addedAt-a.addedAt).map(t=>t.id));break}
   case 'pldelete':{const p=S.pls.find(x=>x.id===view().key);if(!confirm(`'${p.name}' 플레이리스트를 삭제할까요?\n(노래는 지워지지 않아요)`))return;
     await dbDel('playlists',p.id);S.pls=S.pls.filter(x=>x.id!==p.id);history.go(-2);break}
+  case 'link':linkSheet();break;
+  case 'linkrecv':startReceive();break;
+  case 'linksend':linkReset();LINK.role='send';LINK.state='entry';linkUpdate(true);setTimeout(()=>{const i=$('#linkCode');i&&i.focus()},250);break;
+  case 'linkgo':startSend((($('#linkCode')||{}).value||'').replace(/\D/g,''));break;
+  case 'linkoff':linkReset();break;
+  case 'sendpick':$('#sendFile').click();break;
+  case 'sendlib':queueLibrary();break;
   case 'theme':applyTheme(d.th);refresh();break;
   case 'resetstats':{if(!confirm('모든 곡의 재생 횟수와 최근 들은 기록을 지울까요?'))return;
     for(const t of S.tracks)if(t.plays||t.lastPlayed){t.plays=0;t.lastPlayed=0;await dbPut('tracks',t)}refresh();toast('초기화했어요');break}
